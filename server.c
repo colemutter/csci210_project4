@@ -42,14 +42,13 @@ int main() {
         exit(1);
     }
 
-    printf("Server listening for messages...\n");
 
     while (1) {
         
         read_bytes = read(server, &req, sizeof(struct message));
 
         if (read_bytes == sizeof(struct message)) {
-            printf("Received a request from %s to send the message \"%s\" to %s.\n",req.source,req.msg,req.target);
+            printf("Received a request from %s to send the message %s to %s.\n",req.source,req.msg,req.target);
 
         
             sprintf(target_fifo_path, "%s", req.target);
@@ -70,7 +69,7 @@ int main() {
                 if (write(target_fd, &req, sizeof(struct message)) < 0) {
                     perror("Error writing message to target FIFO");
                 } else {
-                    printf("Message successfully routed to %s.\n", req.target);
+                    
                 }
                 
                 close(target_fd);
