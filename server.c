@@ -55,7 +55,14 @@ int main() {
             sprintf(target_fifo_path, "rsh_%s", req.target);
             
             
-            target_fd = open(target_fifo_path, O_WRONLY);
+            int retries = 5;
+            target_fd = -1;
+            while (retries--) {
+                target_fd = open(target_fifo_path, O_WRONLY);
+                if (target_fd >= 0)
+                    break;
+                usleep(100000); // sleep 100ms
+            }
             
             if (target_fd < 0) {
                 perror("Error opening target FIFO for write (Client likely offline)");
