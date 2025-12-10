@@ -52,7 +52,7 @@ int main() {
             printf("Received a request from %s to send the message \"%s\" to %s.\n",req.source,req.msg,req.target);
 
         
-            sprintf(target_fifo_path, "/tmp/rsh_%s", req.target);
+            sprintf(target_fifo_path, "rsh_%s", req.target);
             
             
             target_fd = open(target_fifo_path, O_WRONLY);

@@ -73,7 +73,7 @@ void* messageListener(void *arg) {
 
     // 1. Construct the user's private FIFO path (e.g., /tmp/rsh_username)
     char fifo_path[64];
-    sprintf(fifo_path, "/tmp/rsh_%s", (char*)arg); // uName is passed as arg
+    sprintf(fifo_path, "rsh_%s", (char*)arg); // uName is passed as arg
 
     // 2. Create the FIFO if it doesn't exist
     if (mkfifo(fifo_path, 0666) < 0) {
