@@ -71,30 +71,18 @@ void* messageListener(void *arg) {
     // Incoming message from [source]: [message]
     // put an end of line at the end of the message
 
-    // 1. Construct the user's private FIFO path (e.g., /tmp/rsh_username)
+    
     char fifo_path[64];
     sprintf(fifo_path, "rsh_%s", (char*)arg); // uName is passed as arg
 
-    // 2. Create the FIFO if it doesn't exist
-    if (mkfifo(fifo_path, 0666) < 0) {
-        // mkfifo returns -1 if it already exists, which is fine, 
-        // but an actual error should be handled.
-        if (errno != EEXIST) {
-            perror("mkfifo error");
-            pthread_exit((void*)-1);
-        }
-    }
-    
-    // 3. Open the FIFO for reading (blocking open is standard for listeners)
+   
     int fd = open(fifo_path, O_RDONLY);
     if (fd < 0) {
         perror("Error opening user FIFO for reading");
         pthread_exit((void*)-1);
     }
     
-    // Use O_RDWR to prevent EOF when the writer closes the FIFO. 
-    // If O_RDONLY is used, the loop breaks when the server closes its write-end.
-    // Let's open another descriptor for O_WRONLY to keep the FIFO open (a common trick)
+    
     int fd_keep_open = open(fifo_path, O_WRONLY); 
     if (fd_keep_open < 0) {
         perror("Error opening user FIFO for keeping it open");
