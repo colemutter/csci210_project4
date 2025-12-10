@@ -73,7 +73,7 @@ void* messageListener(void *arg) {
 
 
     char fifo_path[64];
-    sprintf(fifo_path, "rsh_%s", (char*)arg); // uName is passed as arg
+    sprintf(fifo_path, "%s", (char*)arg); // uName is passed as arg
 
     if (mkfifo(fifo_path, 0666) < 0) {
         if (errno != EEXIST) {
