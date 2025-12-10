@@ -71,11 +71,17 @@ void* messageListener(void *arg) {
     // Incoming message from [source]: [message]
     // put an end of line at the end of the message
 
-    
+
     char fifo_path[64];
     sprintf(fifo_path, "rsh_%s", (char*)arg); // uName is passed as arg
 
-   
+    if (mkfifo(fifo_path, 0666) < 0) {
+        if (errno != EEXIST) {
+            perror("mkfifo error");
+            pthread_exit((void*)-1);
+        }
+    }
+    
     int fd = open(fifo_path, O_RDONLY);
     if (fd < 0) {
         perror("Error opening user FIFO for reading");
