@@ -6,6 +6,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 #define N 13
 
@@ -27,34 +29,110 @@ void terminate(int sig) {
 }
 
 void sendmsg (char *user, char *target, char *msg) {
-	// TODO:
-	// Send a request to the server to send the message (msg) to the target user (target)
-	// by creating the message structure and writing it to server's FIFO
+    // TODO:
+    // Send a request to the server to send the message (msg) to the target user (target)
+    // by creating the message structure and writing it to server's FIFO
+    
+    char *server_fifo = "serverFIFO";
+    int fd;
+    struct message message_struct;
 
+    
+    fd = open(server_fifo, O_WRONLY);
+    if (fd < 0) {
+        perror("Error opening server FIFO");
+        return;
+    }
 
+    strncpy(message_struct.source, user, sizeof(message_struct.source) - 1);
+    message_struct.source[sizeof(message_struct.source) - 1] = '\0';
+    
+    strncpy(message_struct.target, target, sizeof(message_struct.target) - 1);
+    message_struct.target[sizeof(message_struct.target) - 1] = '\0';
+    
+    strncpy(message_struct.msg, msg, sizeof(message_struct.msg) - 1);
+    message_struct.msg[sizeof(message_struct.msg) - 1] = '\0';
 
+    if (write(fd, &message_struct, sizeof(struct message)) < 0) {
+        perror("Error writing to server FIFO");
+    } else {
+        
+    }
 
-
-
-
-
+    close(fd);
 }
 
 void* messageListener(void *arg) {
-	// TODO:
-	// Read user's own FIFO in an infinite loop for incoming messages
-	// The logic is similar to a server listening to requests
-	// print the incoming message to the standard output in the
-	// following format
-	// Incoming message from [source]: [message]
-	// put an end of line at the end of the message
+    // TODO:
+    // Read user's own FIFO in an infinite loop for incoming messages
+    // The logic is similar to a server listening to requests
+    // print the incoming message to the standard output in the
+    // following format
+    // Incoming message from [source]: [message]
+    // put an end of line at the end of the message
 
+    // 1. Construct the user's private FIFO path (e.g., /tmp/rsh_username)
+    char fifo_path[64];
+    sprintf(fifo_path, "/tmp/rsh_%s", (char*)arg); // uName is passed as arg
 
+    // 2. Create the FIFO if it doesn't exist
+    if (mkfifo(fifo_path, 0666) < 0) {
+        // mkfifo returns -1 if it already exists, which is fine, 
+        // but an actual error should be handled.
+        if (errno != EEXIST) {
+            perror("mkfifo error");
+            pthread_exit((void*)-1);
+        }
+    }
+    
+    // 3. Open the FIFO for reading (blocking open is standard for listeners)
+    int fd = open(fifo_path, O_RDONLY);
+    if (fd < 0) {
+        perror("Error opening user FIFO for reading");
+        pthread_exit((void*)-1);
+    }
+    
+    // Use O_RDWR to prevent EOF when the writer closes the FIFO. 
+    // If O_RDONLY is used, the loop breaks when the server closes its write-end.
+    // Let's open another descriptor for O_WRONLY to keep the FIFO open (a common trick)
+    int fd_keep_open = open(fifo_path, O_WRONLY); 
+    if (fd_keep_open < 0) {
+        perror("Error opening user FIFO for keeping it open");
+        close(fd);
+        pthread_exit((void*)-1);
+    }
 
+    struct message incoming_msg;
+    int read_bytes;
 
+    while (1) {
+        
+        read_bytes = read(fd, &incoming_msg, sizeof(struct message));
 
+        if (read_bytes == sizeof(struct message)) {
+            
+            printf("\nIncoming message from %s: %s\n", incoming_msg.source, incoming_msg.msg);
+            
+            fprintf(stderr,"rsh>");
+            fflush(stdout); 
+        } else if (read_bytes == 0) {
+            
+            close(fd);
+            fd = open(fifo_path, O_RDONLY);
+            if (fd < 0) {
+                 perror("Error re-opening user FIFO");
+                 break; 
+            }
+        } else if (read_bytes < 0) {
+            perror("Error reading from user FIFO");
+            break; 
+        }
+    }
 
-	pthread_exit((void*)0);
+    close(fd);
+    close(fd_keep_open);
+
+    pthread_exit((void*)0);
 }
 
 int isAllowed(const char*cmd) {
@@ -74,6 +152,7 @@ int main(int argc, char **argv) {
     char line[256];
     int status;
     posix_spawnattr_t attr;
+	pthread_t listener_thread;
 
     if (argc!=2) {
 	printf("Usage: ./rsh <username>\n");
@@ -83,9 +162,11 @@ int main(int argc, char **argv) {
 
     strcpy(uName,argv[1]);
 
-    // TODO:
-    // create the message listener thread
-
+    
+	if (pthread_create(&listener_thread, NULL, messageListener, (void*)uName) != 0) {
+        perror("Error creating message listener thread");
+        exit(1);
+    }
 
 
 
@@ -111,30 +192,47 @@ int main(int argc, char **argv) {
 	}
 
 	if (strcmp(cmd,"sendmsg")==0) {
-		// TODO: Create the target user and
-		// the message string and call the sendmsg function
+        // TODO: Create the target user and
+        // the message string and call the sendmsg function
 
-		// NOTE: The message itself can contain spaces
-		// If the user types: "sendmsg user1 hello there"
-		// target should be "user1" 
-		// and the message should be "hello there"
+        // NOTE: The message itself can contain spaces
+        // If the user types: "sendmsg user1 hello there"
+        // target should be "user1" 
+        // and the message should be "hello there"
+        
+        char *ptr = line2 + strlen(cmd); 
+        
+        while (*ptr == ' ') ptr++;
+        
+        char *target_start = ptr;
+        
+        char *target_end = strchr(target_start, ' ');
 
-		// if no argument is specified, you should print the following
-		// printf("sendmsg: you have to specify target user\n");
-		// if no message is specified, you should print the followingA
- 		// printf("sendmsg: you have to enter a message\n");
+        if (target_end == NULL) {
+            printf("sendmsg: you have to specify a message\n");
+            continue;
+        }
+        
+        *target_end = '\0';
+        char *target = target_start;
 
+        if (strlen(target) == 0) {
+            printf("sendmsg: you have to specify target user\n");
+            continue;
+        }
 
+        char *msg_start = target_end + 1;
+        while (*msg_start == ' ') msg_start++;
 
+        if (strlen(msg_start) == 0) {
+            printf("sendmsg: you have to specify a message\n");
+            continue;
+        }
 
+        sendmsg(uName, target, msg_start);
 
-
-
-
-
-
-		continue;
-	}
+        continue;
+    }
 
 	if (strcmp(cmd,"exit")==0) break;
 
